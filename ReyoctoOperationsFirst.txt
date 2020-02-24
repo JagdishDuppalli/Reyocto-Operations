@@ -1,0 +1,2026 @@
+/**************************************************************************************************
+
+ File Name              : ReyoctoOperationsController
+ Description            : This File Contains Server Side Functionality For PCCOM Protocol.
+                          This functionality is based on P-CCOM Specification(Version 1.3).
+ Created Date           :
+ Last Upadated Date     : 8/08/2018
+ Created By             :
+ 
+**************************************************************************************************/
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Web.Http;
+using System.Web.Security;
+using System.IO;
+using ReyoAuthSecurity;
+using PondStatus;
+
+namespace ReyoctoWebAPI.Controllers
+{
+    /* this class contian all the informations about device called pond (client device)*/
+    public class ReyoctoOperationsController : ApiController
+    {
+        int i = 0;
+        int EKeyy = 0;
+        int SIDCount = 0;
+        string SIDDecimalValue = "";
+        string HexVal = "";
+        string ss = "";
+        string SIDVal = "";
+        string SeqVal = "";
+        string DecSeqVal = "";
+        string LenVal = "";
+
+        static string SessionKey = "";
+        string DateVal = "";
+        string TimeVal = "";
+        string DOVal = "";
+        string PHVal = "";
+        string TempVal = "";
+        string Bnk1AM = "";
+        string Bnk1OF = "";
+        string Bnk2AM = "";
+        string Bnk2OF = "";
+        string BnkOneRunTime = "";
+        string BnkTwoRunTime = "";
+        string Do_SAT = "";
+        string Als_Val = "";
+        string Blor_Sts = "";
+        string Intl_Sens = "";
+        string OP_Code = "";
+        string C2S_NotificationCode = "";
+        int SeqLength = 0;
+        string DataLength = "";
+        string DevIDD = "";
+        string decryptValue = "";
+        private const int DecrptVal = 1;
+        int DecVal = 0;
+        bool CondFlg = false;
+        string Alarm = "";
+        string FeedTimer = "";
+        string PowerStatus = "";
+        string AlarmCode = "";
+        string FTTimeStamp = "";
+        string Receiver_DID = "";
+        string Actu_Action = "";
+        string Sender_DID = "";
+        string Ack_PN = "";
+        string Pgm_Area = "";
+        string FilePath = "";
+        string Packet_Num = "";
+        string Number_Of_Line = "";
+        string Data_Bytes_Net = "";
+        string BootPgmArea = "";
+        string ApplPgmArea = "";
+        string BootVersnNum = "";
+        string ApplVersnNum = "";
+        ReyoSecureLayer RSL = new ReyoSecureLayer();
+
+        /* creating an object for login registration class*/
+        Login_Registration.Log_Registr lg = new Login_Registration.Log_Registr();
+
+        /*creating an object for pond current status class */
+        PondStatus.PondCurrentStatus Pcs = new PondStatus.PondCurrentStatus();
+        ConnectPlusOperations.ConnectPlus CNP = new ConnectPlusOperations.ConnectPlus();
+
+        /* this method is to get the data from the device*/
+        [HttpGet]
+        public string GetReyoctoOperations(string id)
+        {
+            DateTime thisDate1 = new DateTime(2011, 6, 10);
+            string strdate = "Today is " + thisDate1.ToString("MM/ dd/ yyyy") + ".";
+
+            DateTimeOffset thisDate2 = new DateTimeOffset(2011, 6, 10, 15, 24, 16, TimeSpan.Zero);
+            
+            return (ProcessRequest(id));
+            //return (DecodeValue(id));  
+        }
+
+        public int ASCIIToDecimal(char val)
+        {
+            char a = val;
+            DecVal = (int)a;
+            return DecVal;
+        }
+
+        public char DecimalToASCII(int val)
+        {
+            int i = val;
+            char a = (char)i;
+            return a;
+        }
+
+
+        /*method to encrypt the data at the sender side*/
+        public string Encrypt(string val)
+        {
+            string EncryptVal = "";
+
+            string HeaderPart = RSL.Encrypt_Decrypt_Data(val.Substring(0, 17), RSL.HeaderEncr);
+
+            string temp1 = val.Substring(17, val.Length - 17);
+
+            EncryptVal = EncryptVal + HeaderPart + RSL.Encrypt_Decrypt_Data(temp1, RSL.DataEncr);
+
+            return EncryptVal;
+        }
+
+
+        //Encryption for the error frame will be done with error key
+        private string Encrypt_Error(string val)
+        {
+            string EncryptVal = "";
+            string HeaderPart = RSL.Encrypt_Decrypt_Data(val, RSL.HeaderEncr);
+
+            EncryptVal = EncryptVal + HeaderPart;
+
+            return EncryptVal;
+        }
+
+
+        /* method to get the instant date in the form of "yyyy/mm/dd" */
+        private string Split_DTStr(string _str)
+        {
+            string str_Value = "";
+
+            bool CHCK = _str.Contains('/');
+
+            if(_str.Contains('/'))
+            {
+                string LeftStr = _str.Split('/')[0];
+                string RightStr = _str.Split('/')[1];
+
+                if (LeftStr.Length == 1)
+                {
+                    LeftStr = "0" + LeftStr;
+                }
+
+                if (RightStr.Length == 1)
+                {
+                    RightStr = "0" + RightStr;
+                }
+
+                str_Value = RightStr + "/" + LeftStr;
+
+            }
+            else if(_str.Contains('-'))
+            {
+                string LeftStr = _str.Split('-')[0];
+                string RightStr = _str.Split('-')[1];
+
+                if (LeftStr.Length == 1)
+                {
+                    LeftStr = "0" + LeftStr;
+                }
+
+                if (RightStr.Length == 1)
+                {
+                    RightStr = "0" + RightStr;
+                }
+
+                str_Value = RightStr + "/" + LeftStr;
+            }            
+
+            return str_Value;
+        }
+
+        /* method  to split the given string to get the upper and lower limits of data parameters*/
+        private string Split_Str(string _str)
+        {
+            string str_Value = "";
+
+            string LeftStr = _str.Split('.')[0];
+            string RightStr = _str.Split('.')[1];
+
+            if (LeftStr.Length == 1)
+            {
+                LeftStr = "0" + LeftStr;
+            }
+
+            if (RightStr.Length == 1)
+            {
+                RightStr = "0" + RightStr;
+            }
+
+            str_Value = LeftStr + "." + RightStr;
+
+            return str_Value;
+        }
+
+        /* this function is to process the request by splitting the request string into Term Sequence, Data Length
+          SIDRange and Device ID. and give the respective Responces.*/
+
+        public string ProcessRequest(string value)
+        {
+            string result = "";
+            //decryptValue = Decript(value);
+            //SeqLength = decryptValue.Length;
+
+            SeqLength = value.Length;
+            string TermSeq = "";
+            string SIDRange = "";
+            string DecriptData = "";
+            string DataVal = "";
+
+
+            //For Header Part
+            RSL.GenerateCipherFromEKey(true);
+
+            if (SeqLength >= 19)
+            {
+
+                //string HeaderPart = Decript_Header(value.Substring(0, 16));
+
+                string HeaderPart = RSL.Encrypt_Decrypt_Data(value.Substring(0, 17), RSL.HeaderDecr);
+
+                //DataLength = decryptValue.Substring(3, 3);
+                //SIDRange = decryptValue.Substring(0, 3);
+                //DevIDD = decryptValue.Substring(6, 10);
+                
+                SIDRange = HeaderPart.Substring(0, 3);
+                DataLength = HeaderPart.Substring(3, 4);
+                DevIDD = HeaderPart.Substring(7, 10);
+
+                if (Convert.ToInt16(DataLength) + 7 == SeqLength)
+                {
+
+                    RSL.Get_EKey(DevIDD);
+
+                    if (RSL.E_Key != "0")
+                    {
+                        Random rnd = new Random();
+
+                        int RandM_No = rnd.Next(100000, 999999);
+
+                        //SessionKey = RSL.Gen_SessionKey(RandM_No.ToString(), DevIDD);
+
+                        //For Data Part
+                        RSL.GenerateCipherFromEKey(false);
+                        DataVal = value.Substring(17, value.Length - 17);
+
+                        decryptValue = decryptValue + HeaderPart + RSL.Encrypt_Decrypt_Data(DataVal, RSL.DataDecr);
+
+
+                        //decryptValue = Decript(value);
+
+                        TermSeq = decryptValue.Substring(SeqLength - 2, 2);
+
+                        if (TermSeq != "$$")
+                        {
+                            result = Error_ResponseCode("03");
+                        }
+
+                        else
+                        {
+                            if (!Pcs.CheckDeviceID(DevIDD))
+                            {
+                                result = Error_ResponseCode("05");
+                            }
+                            /*this switch statement is to check the service types */
+                            else
+                            {
+                                switch (SIDRange)
+                                {
+                                    case "001":
+                                        result = ServiceID_001();
+                                        break;
+                                    case "002":
+                                        result = ServiceID_002();
+                                        break;
+                                    case "003":
+                                        result = ServiceID_003();
+                                        break;
+                                    case "004":
+                                        result = ServiceID_004();
+                                        break;
+                                    case "005":
+                                        result = ServiceID_005();
+                                        break;
+                                    case "006":
+                                        result = ServiceID_006();
+                                        break;
+                                    case "007":
+                                        result = ServiceID_007();
+                                        break;
+                                    case "008":
+                                        result = ServiceID_008();
+                                        break;
+                                    case "009":
+                                        result = ServiceID_009();
+                                        break;
+                                    case "010":
+                                        result = ServiceID_010();
+                                        break;
+                                    case "011":
+                                        result = ServiceID_011();
+                                        break;
+                                    case "012":
+                                        //result = ServiceID_012();
+                                        break;
+                                    default:
+                                        result = Error_ResponseCode("04");
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        result = Error_ResponseCode("05");
+                    }
+                }
+                else
+                {
+                    result = Error_ResponseCode("02");
+                }
+            }
+            else
+            {
+                result = Error_ResponseCode("02");
+            }
+            return result;
+        }
+
+
+        /*this function is to do the first service called 'login service'*/
+        public string ServiceID_001()
+        {
+            string StrCode = "";
+            Random rnd = new Random();
+
+            ReyoAuthSecurity.ReyoSecureLayer RSlayr = new ReyoSecureLayer();
+
+            string result_001 = "";
+            /*in the first service the data length should be "0012" otherwise it will give error as length error*/
+            if (DataLength != "0012")
+            {
+                result_001 = Error_ResponseCode("02");
+            }
+            else
+            {
+                try
+                {
+                    int RandM_No = rnd.Next(100000, 999999);
+
+
+
+                    StrCode = StrCode + "2010018" + DevIDD + RandM_No.ToString() + "$$";
+
+                    //SessionKey = Gen_SessionKey(RandM_No.ToString(), DevID);
+                    SessionKey = RSlayr.Gen_SessionKey(RandM_No.ToString(), DevIDD);
+
+                    //return StrCode;
+                }
+                catch (Exception ex)
+                {
+                    string ExMessage = ex.Message;
+                    return "";
+                }
+            }
+
+            //result_001 = RSlayr.Gen_SessionKey
+            result_001 = Encrypt(StrCode);
+            return result_001;
+        }
+
+        /* this function is to do the third service called 'get notifications from the server' */
+        public string ServiceID_002()
+        {
+            string result_002 = "";
+            /*in the second service the data length should be "0078" otherwise it will give error as length error*/
+            if (DataLength != "0078")
+            {
+                result_002 = Error_ResponseCode("02");
+            }
+            else
+            {
+                /*if string length is more than 19 then sessionkey will generate and 
+                 and check that with device key And if these two matches then authentication will success*/
+                SessionKey = decryptValue.Substring(17, 6);
+
+                /*the sessionkey is used to check the authentication using device-id
+                  if they does not match then authentication failure error will come*/
+                if (!lg.CheckSessionID(DevIDD, SessionKey))
+                {
+                    result_002 = Error_ResponseCode("07");
+                }
+                else
+                {
+                    /* get the date from that decrypted string using substring method*/
+                    DateVal = decryptValue.Substring(23, 10);
+                    /* get the time from that decrypted string using substring method*/
+                    TimeVal = decryptValue.Substring(33, 5);
+
+                    /*date formate is like dd-mn-yyyy*/
+                    string DtVal = decryptValue.Substring(23, 2);
+                    string MnthVal = decryptValue.Substring(26, 2);
+                    string YrVal = decryptValue.Substring(29, 4);
+
+                    /*date formate is like yyyy-mm-dd*/
+                    //DateTime thisDate1;
+                    //check this date value before enter into the database
+                    DateTime thisDate1 = new DateTime(2011, 6, 10);
+
+                    /*to handling the exception if any*/
+                    try
+                    {
+                        thisDate1 = new DateTime(Convert.ToInt16(YrVal), Convert.ToInt16(MnthVal), Convert.ToInt16(DtVal));
+                    }
+                    catch (Exception ex)
+                    {
+                        /* if we did not get the correct date then error will through here as invalid parameter*/
+                        CondFlg = true;
+                    }
+
+                    if (CondFlg == true)
+                    {
+                        result_002 = Error_ResponseCode("05");
+                    }
+                    else
+                    {
+                        /*it will give start date and time of project*/
+                        string strdate = thisDate1.ToString("yyyy/MM/dd") + " " + TimeVal + ":00";
+
+                        DateTime Dte;
+
+                        /*if the start date time and stored date time is not eqal then it will give error*/
+                        if (!DateTime.TryParse(strdate, out Dte))
+                        {
+                            result_002 = Error_ResponseCode("05");
+                        }
+                        else
+                        {
+                            /*here these will give the pond parameters from the string by using substring method*/
+                            DOVal = decryptValue.Substring(38, 5);
+                            PHVal = decryptValue.Substring(43, 5);
+                            TempVal = decryptValue.Substring(48, 5);
+                            Bnk1AM = decryptValue.Substring(53, 1);
+                            Bnk1OF = decryptValue.Substring(54, 1);
+                            Bnk2AM = decryptValue.Substring(55, 1);
+                            Bnk2OF = decryptValue.Substring(56, 1);
+                            BnkOneRunTime = decryptValue.Substring(57, 5);
+
+                            int B1HRTime = Convert.ToInt16(BnkOneRunTime.Substring(0, 2));
+                            int B1MINTime = Convert.ToInt16(BnkOneRunTime.Substring(3, 2));                            
+
+                            BnkTwoRunTime = decryptValue.Substring(62, 5);
+
+                            int B2HRTime = Convert.ToInt16(BnkTwoRunTime.Substring(0, 2));
+                            int B2MINTime = Convert.ToInt16(BnkTwoRunTime.Substring(3, 2));
+
+                            Do_SAT = decryptValue.Substring(67, 6);
+                            Als_Val = decryptValue.Substring(73, 6);
+                            Blor_Sts = decryptValue.Substring(79, 1);
+                            Intl_Sens = decryptValue.Substring(80, 1);
+                            OP_Code = decryptValue.Substring(81, 2);
+
+                            /*It is to check the mode of Bank1.Bank1 should be in either auto or manual mode otherwise it will give error*/
+                            if (Bnk1AM != "A" && Bnk1AM != "M" && Bnk1AM != "D")
+                            {
+                                result_002 = Error_ResponseCode("05");
+                            }
+                            /*It is to check the mode of Bank2.Bank2 should be in either auto or manual mode otherwise it will give error*/
+
+                            else if (Bnk2AM != "A" && Bnk2AM != "M" && Bnk2AM != "D")
+                            {
+                                result_002 = Error_ResponseCode("05");
+                            }
+                            /*To Check the Bank1 is on or off*/
+
+                            else if (Bnk1OF != "O" && Bnk1OF != "F")
+                            {
+                                result_002 = Error_ResponseCode("05");
+                            }
+                            /*To Check the Bank2 is on or off*/
+
+                            else if (Bnk2OF != "O" && Bnk2OF != "F")
+                            {
+                                result_002 = Error_ResponseCode("05");
+                            }
+
+                            if (result_002 != Error_ResponseCode("05"))
+                            {
+                                if ((B1HRTime < 00) || (B1HRTime > 23) || BnkOneRunTime[2] != ':' || (B1MINTime < 00) || (B1MINTime > 59))
+                                {
+                                    result_002 = Error_ResponseCode("05");
+                                }
+                                else if ((B2HRTime < 00) || (B2HRTime > 23) || BnkTwoRunTime[2] != ':' || (B2MINTime < 00) || (B2MINTime > 59))
+                                {
+                                    result_002 = Error_ResponseCode("05");
+                                }
+                            }
+
+
+                            if (result_002 != Error_ResponseCode("05"))
+                            {
+                                if (Blor_Sts != "O" && Blor_Sts != "F" && Blor_Sts != "M" && Blor_Sts != "D")
+                                {
+                                    result_002 = Error_ResponseCode("05");
+                                }
+
+                                else if (Intl_Sens != "O" && Intl_Sens != "F")
+                                {
+                                    result_002 = Error_ResponseCode("05");
+                                }
+                            }
+
+                            if (result_002 != Error_ResponseCode("05"))
+                            {
+                                /*using list collection pond parameters will store in server*/
+                                List<string> PondData = new List<string>();
+
+                                PondData.Add(DevIDD);
+                                PondData.Add(DOVal);
+                                PondData.Add(PHVal);
+                                PondData.Add(TempVal);
+                                PondData.Add(strdate);
+                                PondData.Add(Bnk1AM);
+                                PondData.Add(Bnk1OF);
+                                PondData.Add(Bnk2AM);
+                                PondData.Add(Bnk2OF);
+                                PondData.Add(BnkOneRunTime);
+                                PondData.Add(BnkTwoRunTime);
+                                PondData.Add(Do_SAT);
+                                PondData.Add(Als_Val);
+                                PondData.Add(Blor_Sts);
+                                PondData.Add(Intl_Sens);
+                                PondData.Add(OP_Code);
+
+                                /*by this the pond current data will get update by the recent values*/
+                                int RowsAffected = Pcs.UpdatePondData(PondData);
+
+                                /*if the pond current status did not updated with new values then when user asked for updated values it will give error*/
+                                if (RowsAffected == 0)
+                                {
+                                    result_002 = Error_ResponseCode("05");
+                                }
+                                else
+                                    /*the service that is updates pond parameters to server and return the  successful string value*/
+                                    result_002 = Encrypt("2020012" + DevIDD + "$$");
+                            }
+                        }
+                    }
+                }
+            }
+            return result_002;
+        }
+
+        /* this function is to do the third service called 'get notifications from the server' */
+        public string ServiceID_003()
+        {
+            string result_003 = "";
+            /* To get the notification data in string format*/
+            string NotificationDataStr = "";
+            /*To get the respective notification code*/
+            string NotificationCode = "";
+            /*To get the number of notifications from the server*/
+            int NtfNo = 0;
+            /* To get the length of the notification code*/
+            int NotiDataLength = 0;
+
+            int dtlngth = Convert.ToInt32(DataLength);
+            /*in this service the data length should be "0018" otherwise it will show length error*/
+            if (DataLength != "0018")
+            {
+                result_003 = Error_ResponseCode("02");
+            }
+
+            /*the sessionkey is used to check the authentication, the session key and device-id should match with the value present in database.
+             if they does not match then authentication failure error will come*/
+            else
+            {
+                SessionKey = decryptValue.Substring(17, 6);
+                if (!lg.CheckSessionID(DevIDD, SessionKey))
+                {
+                    result_003 = Error_ResponseCode("07");
+                }
+                else
+                {
+                    //PondStatus.Notification_Status Pns = new PondStatus.Notification_Status();
+                    List<PondStatus.Notification_Status> PNSList = new List<PondStatus.Notification_Status>();
+
+                    /* This is to get the notification list from the server based on the respective device id and put that in list*/
+                    PNSList = Pcs.GetNotificationData(DevIDD);
+
+                    /*this condition is to read(get) the frequency of the pond*/
+                    if (!PNSList[0].Read_Frequency.Equals(0))
+                    {
+                        string FreqncyStr = "";
+                        if (PNSList[0].Read_Frequency.ToString().Length == 1)
+                        {
+                            FreqncyStr = "00" + PNSList[0].Read_Frequency.ToString();
+                        }
+                        else if (PNSList[0].Read_Frequency.ToString().Length == 2)
+                        {
+                            FreqncyStr = "0" + PNSList[0].Read_Frequency.ToString();
+                        }
+                        else
+                        {
+                            FreqncyStr = PNSList[0].Read_Frequency.ToString();
+                        }
+
+                        NotificationDataStr = NotificationDataStr + "01" + FreqncyStr;
+                        NotificationCode = NotificationCode + "01";
+                        NotiDataLength = NotiDataLength + 3 + 2;
+                        NtfNo++;
+                    }
+
+                    /*this condition is to read(get) the DO values of pond*/
+                    if (!PNSList[0].DO_LowerLimit.Equals(0) || !PNSList[0].DO_UpperLimit.Equals(0))
+                    {
+                        string _StrVal = "";
+                        _StrVal = Split_Str(PNSList[0].DO_LowerLimit.ToString());
+
+                        NotificationDataStr = NotificationDataStr + "02" + _StrVal;
+
+                        _StrVal = "";
+                        _StrVal = Split_Str(PNSList[0].DO_UpperLimit.ToString());
+
+                        NotificationDataStr = NotificationDataStr + _StrVal;
+                        NotificationCode = NotificationCode + "02";
+                        NotiDataLength = NotiDataLength + 10 + 2;
+                        NtfNo++;
+                    }
+
+                    /*this condition is to read(get) the PH vlaues of pond*/
+                    if (!PNSList[0].PH_LowerLimit.Equals(0) || !PNSList[0].PH_UpperLimit.Equals(0))
+                    {
+                        string _StrVal = "";
+                        _StrVal = Split_Str(PNSList[0].PH_LowerLimit.ToString());
+                        NotificationDataStr = NotificationDataStr + "03" + _StrVal;
+                        _StrVal = "";
+                        _StrVal = Split_Str(PNSList[0].PH_UpperLimit.ToString());
+                        NotificationDataStr = NotificationDataStr + _StrVal;
+                        NotificationCode = NotificationCode + "03";
+                        NotiDataLength = NotiDataLength + 10 + 2;
+                        NtfNo++;
+                    }
+
+                    /*this condition is to read(get) the shrimp weight of pond*/
+                    if (!PNSList[0].shrimp_weight.Equals(0))
+                    {
+                        string _StrVal = "";
+
+                        string LeftStr = PNSList[0].shrimp_weight.ToString().Split('.')[0];
+                        string RightStr = PNSList[0].shrimp_weight.ToString().Split('.')[1];
+
+                        if (LeftStr.Length == 1)
+                        {
+                            LeftStr = "0" + LeftStr;
+                        }
+
+                        _StrVal = LeftStr + "." + RightStr;
+                        NotificationDataStr = NotificationDataStr + "04" + _StrVal;
+                        NotificationCode = NotificationCode + "04";
+                        NotiDataLength = NotiDataLength + 4 + 2;
+                        NtfNo++;
+                    }
+
+                    /* when the notification code is 05 then On receipt of this notification code, the device
+                       will perform the reading of the water parameters and Updates the server through service “SID-002: Update Pond Parameters to Server”.*/
+                    if (!PNSList[0].Read_Sensor.Equals(0))
+                    {
+                        NotificationDataStr = NotificationDataStr + "05";
+                        NotificationCode = NotificationCode + "05";
+                        NotiDataLength = NotiDataLength + 0 + 2;
+                        NtfNo++;
+                    }
+
+                    /*to read(get) the start date of the corp*/
+                    if (!PNSList[0].Crop_StartDate.Year.Equals(DateTime.Now.AddYears(-50).Year))
+                    {
+                        string SDateVal = Convert.ToDateTime(PNSList[0].Crop_StartDate.ToString()).Date.ToString("d");
+                        string CYear = Convert.ToDateTime(PNSList[0].Crop_StartDate.ToString()).Date.Year.ToString();
+                        string DTstr = Split_DTStr(SDateVal) + "/" + CYear;
+                        NotificationDataStr = NotificationDataStr + "06" + DTstr;
+                        NotificationCode = NotificationCode + "06";
+                        NotiDataLength = NotiDataLength + 10 + 2;
+                        NtfNo++;
+                    }
+
+                    /*to read(get) the end date of corp*/
+                    if (!PNSList[0].Crop_EndDate.Year.Equals(DateTime.Now.AddYears(-50).Year))
+                    {
+                        string EDateVal = "";
+                        string CYear = "";
+                        string DTstr = "";
+
+                        EDateVal = Convert.ToDateTime(PNSList[0].Crop_EndDate.ToString()).Date.ToString("d");
+                        CYear = Convert.ToDateTime(PNSList[0].Crop_EndDate.ToString()).Date.Year.ToString();
+
+                        DTstr = Split_DTStr(EDateVal) + "/" + CYear;
+                        NotificationDataStr = NotificationDataStr + "07" + DTstr;
+                        NotificationCode = NotificationCode + "07";
+                        NotiDataLength = NotiDataLength + 10 + 2;
+                        NtfNo++;
+                    }
+
+                    /*to read(get) the salanity of pond*/
+                    if (!PNSList[0].Salinity.Equals(0))
+                    {
+                        string _StrVal = "";
+                        _StrVal = Split_Str(PNSList[0].Salinity.ToString());
+
+                        NotificationDataStr = NotificationDataStr + "08" + _StrVal;
+                        NotificationCode = NotificationCode + "08";
+                        NotiDataLength = NotiDataLength + 5 + 2;
+                        NtfNo++;
+                    }
+
+                    /*to read(get) the plankton density of pond*/
+                    if (!PNSList[0].plankton_density.Equals(0))
+                    {
+                        string _StrVal = "";
+                        _StrVal = Split_Str(PNSList[0].plankton_density.ToString());
+                        NotificationDataStr = NotificationDataStr + "09" + _StrVal;
+                        NotificationCode = NotificationCode + "09";
+                        NotiDataLength = NotiDataLength + 5 + 2;
+                        NtfNo++;
+                    }
+                    /*to read(get) the mode of bank1, is it manual or auto*/
+                    if (!PNSList[0].Bank1_Amps.Equals(0))
+                    {
+                        string _StrVal = "";
+                        _StrVal = Split_Str(PNSList[0].Bank1_Amps.ToString());
+                        NotificationDataStr = NotificationDataStr + "10" + _StrVal;
+                        NotificationCode = NotificationCode + "10";
+                        NotiDataLength = NotiDataLength + 5 + 2;
+                        NtfNo++;
+                    }
+
+                    /*to read(get) the mode of bank2, is it manual or auto*/
+                    if (!PNSList[0].Bank2_Amps.Equals(0))
+                    {
+                        string _StrVal = "";
+                        _StrVal = Split_Str(PNSList[0].Bank2_Amps.ToString());
+                        NotificationDataStr = NotificationDataStr + "11" + _StrVal;
+                        NotificationCode = NotificationCode + "11";
+                        NotiDataLength = NotiDataLength + 5 + 2;
+                        NtfNo++;
+                    }
+
+                    /*to read(get) the information about the user mobile number*/
+                    if (!(PNSList[0].User_MobileNo).Equals("0"))
+                    {
+                        NotificationDataStr = NotificationDataStr + "12" + PNSList[0].User_MobileNo.ToString();
+                        NotificationCode = NotificationCode + "12";
+                        NotiDataLength = NotiDataLength + 10 + 2;
+                        NtfNo++;
+                    }
+
+                    /*to read(get) the device key*/
+                    if (!PNSList[0].Device_EKey.Equals(0))
+                    {
+
+                        if (PNSList[0].Device_EKey.ToString().Length == 1)
+                        {
+                            /*if the device ekey string having only one didgit then we need to add three 0s to the digit because device key must be of 4 digits*/
+                            NotificationDataStr = NotificationDataStr + "13" + "000" + PNSList[0].Device_EKey.ToString();
+                        }
+                        else if (PNSList[0].Device_EKey.ToString().Length == 2)
+                        {
+                            /*if the device ekey string having only one didgit then we need to add two 0s to the digit because device key must be of 4 digits*/
+                            NotificationDataStr = NotificationDataStr + "13" + "00" + PNSList[0].Device_EKey.ToString();
+                        }
+                        else if (PNSList[0].Device_EKey.ToString().Length == 3)
+                        {
+                            /*if the device ekey string having only one didgit then we need to add one 0 to the digit because device key must be of 4 digits*/
+                            NotificationDataStr = NotificationDataStr + "13" + "0" + PNSList[0].Device_EKey.ToString();
+                        }
+                        else
+                        {
+                            NotificationDataStr = NotificationDataStr + "13" + PNSList[0].Device_EKey.ToString();
+                        }
+
+                        NotificationCode = NotificationCode + "13";
+                        NotiDataLength = NotiDataLength + 4 + 2;
+                        NtfNo++;
+                    }
+
+                    /*to read(get) the Shrimp Count density of pond*/
+                    if (!PNSList[0].Shrimp_Count.Equals(0))
+                    {
+                        string _StrVal = "";
+                        _StrVal = PNSList[0].Shrimp_Count.ToString();
+                        NotificationDataStr = NotificationDataStr + "14" + _StrVal;
+                        NotificationCode = NotificationCode + "14";
+                        NotiDataLength = NotiDataLength + 7 + 2;
+                        NtfNo++;
+                    }
+
+                    /*to read(get) the Oxygen_transfer_rate of the pond*/
+                    if (!PNSList[0].OxyTransRate.Equals(0))
+                    {
+                        string _StrVal = "";
+                        _StrVal = Split_Str(PNSList[0].OxyTransRate.ToString());
+
+                        NotificationDataStr = NotificationDataStr + "15" + _StrVal;
+                        NotificationCode = NotificationCode + "15";
+                        NotiDataLength = NotiDataLength + 5 + 2;
+                        NtfNo++;
+                    }
+
+
+                    /*this is the notification from server to client indicating that there is one request from one device to do some service for that device */
+                    if (!PNSList[0].DTDreq.Equals("0"))
+                    {
+                        string _StrVal = "";
+                        if (PNSList[0].DTDreq != "")
+                        {                          
+
+                            NotificationDataStr = NotificationDataStr + "16" + PNSList[0].DTDreq;
+                            NotificationCode = NotificationCode + "16";
+                            NotiDataLength = NotiDataLength + 13 + 2;
+                            NtfNo++;                            
+                        }
+                    }
+
+                    /*this is the notification from server to client indicating that the request sent from one device for to do some service for it is successfully completed.*/
+                    if (!PNSList[0].ACKdtd.Equals("0"))
+                    {
+                        if (PNSList[0].ACKdtd != "")
+                        {
+                            //string _StrVal = "";
+                            //_StrVal = Split_Str(PNSList[0].ACKdtd.ToString());
+                            NotificationDataStr = NotificationDataStr + "17" + PNSList[0].ACKdtd.ToString();
+                            NotificationCode = NotificationCode + "17";
+                            NotiDataLength = NotiDataLength + 11 + 2;
+                            NtfNo++;                            
+                        }
+                    }
+
+                    /* this is the notification from server to client indicating that there is some file or document is present which is required for device*/
+
+                    if (!PNSList[0].New_Firmware_Availability.Equals(0))
+                    {
+                        string _StrVal = "";
+                        if (PNSList[0].New_Firmware_Availability != "00")
+                        {
+                            _StrVal = PNSList[0].New_Firmware_Availability.ToString();
+                            NotificationDataStr = NotificationDataStr + "18" + _StrVal;
+                            NotificationCode = NotificationCode + "18";
+                            NotiDataLength = NotiDataLength + 9 + 2;
+                            NtfNo++;
+                        }
+                    }
+
+                    if (!PNSList[0].Feed_Timer.Equals(0))
+                    {
+                        string _StrVal = "";
+                        //_StrVal = Split_Str(PNSList[0].Feed_Timer.ToString());
+                        _StrVal = PNSList[0].Feed_Timer.ToString();
+
+                        if (_StrVal.Length == 2)
+                        {
+                            _StrVal = "0" + _StrVal;
+                        }
+                        else if (_StrVal.Length == 1)
+                        {
+                            _StrVal = "00" + _StrVal;
+                        }
+
+                        NotificationDataStr = NotificationDataStr + "19" + _StrVal;
+                        NotificationCode = NotificationCode + "19";
+                        NotiDataLength = NotiDataLength + 3 + 2;
+                        NtfNo++;
+                    }
+
+                    if(!PNSList[0].Loop_Config.Equals(0))
+                    {
+                        int No_Of_Channels = 0;
+                        String ParamList;
+                        String ParaID = "";
+                        String ChanID = "";
+
+                        No_Of_Channels = Convert.ToInt32(PNSList[0].No_Of_Channels);
+
+                        if(No_Of_Channels != 0)
+                        {
+                            int[] ChannelList = Pcs.ConnPlusSensor_Operations(DevIDD, 1, No_Of_Channels);
+                            int[] ParList = Pcs.ConnPlusSensor_Operations(DevIDD, 2, No_Of_Channels);
+
+                            for (int i = 0; i < No_Of_Channels; i++)
+                            {
+                                ChanID = ChannelList[i].ToString();
+                                ParamList = ParList[i].ToString();
+
+                                if (ChanID.Length == 1)
+                                {
+                                    ChanID = "0" + ChanID;
+                                }
+
+
+                                if (ParamList.Length == 1)
+                                {
+                                    ParamList = "0" + ParamList;
+                                }
+
+                                ParaID = ParaID + ChanID + ParamList;
+
+                            }
+
+                            String No_Channels_Str = No_Of_Channels.ToString();
+
+                            if (Convert.ToString(No_Of_Channels).Length == 1)
+                            {
+                                No_Channels_Str = "0" + No_Channels_Str;
+                            }
+
+
+                            NotificationDataStr = NotificationDataStr + "20" + No_Channels_Str + ParaID;
+                            NotificationCode = NotificationCode + "20";
+                            NotiDataLength = NotiDataLength + 4 + (No_Of_Channels * 4);
+                            NtfNo++;
+                        }
+                        
+
+                    }
+
+                    /* this is to find total number of notifications, if it less than 9,then display as 01,02 like this. 
+                       otherwise if notification's code is double digit then it will display as it is. */
+                    string NTFNoStr = "";
+                    if (NtfNo <= 9)
+                    {
+                        NTFNoStr = NTFNoStr + "0" + NtfNo.ToString();
+                    }
+                    else
+                    {
+                        NTFNoStr = NTFNoStr + NtfNo.ToString();
+                    }
+
+                    /* this is to display notification's code in int form */
+                    int NOTILngth = DevIDD.Length + 2 + NotiDataLength + 2;
+
+                    /*this is to get the notification length value in string format*/
+                    string NOTILngth_S = NOTILngth.ToString();
+
+                    /* this is to display single digit notification's code */
+                    if (NOTILngth_S.Length == 1)
+                    {
+                        NOTILngth_S = "000" + NOTILngth_S;
+                    }
+                    /* this is to display double digit notification's code*/
+                    else if (NOTILngth_S.Length == 2)
+                    {
+                        NOTILngth_S = "00" + NOTILngth_S;
+                    }
+                    else if (NOTILngth_S.Length == 3)
+                    {
+                        NOTILngth_S = "0" + NOTILngth_S;
+                    }
+
+                    /* according to service 3,get the notification from the server and based on that notification updated parameters will send to the server*/
+                    string resp_Code = "203" + NOTILngth_S + DevIDD + NTFNoStr + NotificationDataStr + "$$";
+                    result_003 = Encrypt(resp_Code);
+                }
+            }
+            return result_003;
+        }
+
+        /* this function is to do the fourth service called 'push notifications to the server' */
+        public string ServiceID_004()
+        {
+            string result_004 = "";
+            int dtlngth = Convert.ToInt32(DataLength);
+            /*in this service the data length should be "0023" otherwise it will show length error*/
+            if (dtlngth < 22)
+            {
+                result_004 = Error_ResponseCode("02");
+            }
+            else
+            {
+                /* the sessionkey is used to check the authentication, the session key and device-id should match with the value present in database.
+              if they does not match then authentication failure error will come*/
+                SessionKey = decryptValue.Substring(17, 6);
+                if (!lg.CheckSessionID(DevIDD, SessionKey))
+                {
+                    result_004 = Error_ResponseCode("07");
+                }
+                else
+                {
+                    /* this NuM_Notification variable is used to represent the number of notifications to put to the server informations */
+                    string NuM_Notification = decryptValue.Substring(23, 2);
+                    int No_Noti = Convert.ToInt32(NuM_Notification);
+                    /*this C2S_NotificationCode variable is used to represent the client to server notification informations */
+                    int Notifn_Status = 0;
+                    string NotiStr = "";
+                    /* this is to call the function called put notification*/
+                    for (int i = 0; i < No_Noti; i++)
+                    {
+                        int j = i * 3;
+                        string CS_NotifCode = decryptValue.Substring(25 + j, 3);
+                        Notifn_Status = Pcs.Put_Notification((CS_NotifCode), DevIDD);
+                        NotiStr = NotiStr + CS_NotifCode;
+                    }
+                    /* After getting that CS_NotificationCode it will go to Put_Notification method, in that method Noti_Status will come.
+                     that Noti_Status should be greater than zero otherwise it will error as invalid parameter.  */
+                    if (Notifn_Status > 0)
+                    {
+                        string CS_Success = "204" + "0012" + DevIDD + "$$";
+                        result_004 = Encrypt(CS_Success);
+                    }
+                    else
+                    {
+                        result_004 = Error_ResponseCode("05");
+                    }
+                }
+            }
+            return result_004;
+        }
+
+        /* this function is to do the fifth service called 'confirm device key' */
+        public string ServiceID_005()
+        {
+            string result_005 = "";
+            /*in this service the data length should be "0024" otherwise it will show length error*/
+            if (DataLength != "0024")
+            {
+                result_005 = Error_ResponseCode("02");
+            }
+            else
+            {
+                /* the sessionkey is used to check the authentication, the session key and device-id should match with the value present in database.
+             if they does not match then authentication failure error will come*/
+                SessionKey = decryptValue.Substring(17, 6);
+                if (!lg.CheckSessionID(DevIDD, SessionKey))
+                {
+                    result_005 = Error_ResponseCode("07");
+                }
+                string Noti_Code = decryptValue.Substring(23, 2);
+                int Noti_Key = Convert.ToInt32(decryptValue.Substring(25, 4));
+
+                if (Noti_Code != "13")
+                {
+                    result_005 = Error_ResponseCode("05");
+                }
+                else
+                {
+                    /* After getting the Noti_Key it will go the Check_EKey method and process for authentication with the Device ID, if these two matches
+                   then authentication successfull, if these two did not match then the process performing operations with the old Noti_Key only.*/
+                    bool CS_Status = Pcs.Check_EKey(DevIDD, Noti_Key);
+
+                    /*if Authentication is successfull the it will be proceed with new key otherwise it will give error as Key Authentication Failed. */
+                    if (CS_Status == true)
+                    {
+                        string CS_Resp_String = "205" + "0012" + DevIDD + "$$";
+                        result_005 = Encrypt(CS_Resp_String);
+                        Pcs.Update_EKey(DevIDD);
+
+                    }
+                    else
+                    {
+                        result_005 = Error_ResponseCode("07");
+                    }
+                }
+
+            }
+            return result_005;
+        }
+
+        /* this function is to do the sixth service called 'Async-Data Event' */
+        public string ServiceID_006()
+        {
+            string result_006 = "";
+            /*in this service the data length should be "0029" otherwise it will show length error*/
+            if (DataLength != "0029")
+            {
+                result_006 = Error_ResponseCode("02");
+            }
+            else
+            {
+                /* the sessionkey is used to check the authentication, the session key and device-id should match with the value present in database.
+                 if they does not match then authentication failure error will come*/
+                SessionKey = decryptValue.Substring(17, 6);
+                if (!lg.CheckSessionID(DevIDD, SessionKey))
+                {
+                    result_006 = Error_ResponseCode("07");
+                }
+                else
+                {
+                    /* Alarm value should be either any of these 3 that is "O" or "F" or "S"
+                     otherwise it will give error*/
+                    Alarm = decryptValue.Substring(23, 1);
+                    if (Alarm != "O" && Alarm != "F" && Alarm != "S")
+                    {
+                        result_006 = Error_ResponseCode("05");
+                    }
+                    else
+                    {
+                        /* after alarm, the alarm code will split that means A Code of Diagnostic List. it will represents the Diagnostic(3 bytes)
+                         and we will get FeedTimer. */
+                        AlarmCode = decryptValue.Substring(24, 3);
+                        FeedTimer = decryptValue.Substring(27, 1);
+                        if (FeedTimer != "O" && FeedTimer != "F")
+                        {
+                            result_006 = Error_ResponseCode("05");
+                        }
+                        else
+                        {                            
+                            FTTimeStamp = decryptValue.Substring(28, 5);
+                            int FeedTimeHR = Convert.ToInt16(FTTimeStamp.Substring(0, 2));
+                            int FeedTimeMin = Convert.ToInt16(FTTimeStamp.Substring(3, 2));
+                            if (result_006 != Error_ResponseCode("05"))
+                            {
+                                if ((FeedTimeHR < 00) || (FeedTimeHR > 23) || FTTimeStamp[2] != ':' || (FeedTimeMin < 00) || (FeedTimeMin > 59))
+                                {
+                                    result_006 = Error_ResponseCode("05");
+                                }
+                            }
+
+                            if (result_006 != Error_ResponseCode("05"))
+                            {
+                                PowerStatus = decryptValue.Substring(33, 1);
+                                if (PowerStatus != "B" && PowerStatus != "L" && PowerStatus != "G")
+                                {
+                                    result_006 = Error_ResponseCode("05");
+                                }
+                                else
+                                {
+                                    PondSettings.PondSetting Ps = new PondSettings.PondSetting();
+                                    PondSettings.Alarm_Info AInfo = new PondSettings.Alarm_Info();
+                                    AInfo.DevIDD = DevIDD;
+                                    AInfo.Alarm = Convert.ToChar(Alarm);
+                                    AInfo.Alarm_Code = AlarmCode;
+                                    AInfo.Feed_Timer = Convert.ToChar(FeedTimer);
+                                    AInfo.Feed_Time = FTTimeStamp;
+                                    AInfo.Power_Status = Convert.ToChar(PowerStatus);
+                                    AInfo.Flag = 1;
+
+                                    Ps.Code_006_Operations(AInfo);
+                                    result_006 = Encrypt("2060012" + DevIDD + "$$");
+                                }
+                            }                     
+
+                        }
+                    }
+                }
+            }
+            return result_006;
+        }
+
+        /* this function is to do the seventh service called 'Device to Device Communication Request' */
+        public string ServiceID_007()
+        {
+            /*in this service the data length should be "0031" otherwise it will show length error*/
+            string result_007 = "";
+            if (DataLength != "0031")
+            {
+                result_007 = Error_ResponseCode("02");
+            }
+            else
+            {
+                /* the sessionkey is used to check the authentication, the session key and device-id should match with the value present in database.
+             if they does not match then authentication failure error will come*/
+                SessionKey = decryptValue.Substring(17, 6);
+                if (!lg.CheckSessionID(DevIDD, SessionKey))
+                {
+                    result_007 = Error_ResponseCode("07");
+                }
+                else
+                {
+                    /* after checked the session key string will split into recver DID(the device one who is requesting to do some work for
+                       it to other device) and Actu_Action(this means what actually that work which is asking from the first device) */
+                    Receiver_DID = decryptValue.Substring(23, 10);
+                    Actu_Action = decryptValue.Substring(33, 3);
+                    string a = Actu_Action.Substring(0, 1);
+                    string b = Actu_Action.Substring(1, 1);
+                    string c = Actu_Action.Substring(2, 1);
+
+                    if (a != "O" && a != "F" && a != "X")
+                    {
+                        result_007 = Error_ResponseCode("05");
+                    }
+                    else
+                    {
+                        if (b != "O" && b != "F" && b != "X")
+                        {
+                            result_007 = Error_ResponseCode("05");
+                        }
+                        else
+                        {
+                            if (c != "O" && c != "F" && c != "X")
+                            {
+                                result_007 = Error_ResponseCode("05");
+                            }
+                            else
+                            {
+                                Int64 DID1 = Convert.ToInt64(DevIDD);
+                                Int64 DID2 = Convert.ToInt64(Receiver_DID);
+
+                                /*HERE WE NEED To creat the object for update the database by giving the RDID and Actu_Action and flag(to show the exact function) */
+                                PondStatus.PondCurrentStatus psts = new PondStatus.PondCurrentStatus();
+
+                                /* through this we are sending the parameters which are required for Device_Comm function which is related to the database*/
+                                int P_S = psts.Device_Comm(DID1, DID2, Actu_Action, 0, "0");
+                                result_007 = Encrypt("2070012" + DevIDD + "$$");
+                            }
+                        }
+                    }
+                }
+            }
+            return result_007;
+        }
+
+        /* this function is to do the eighth service called 'Device to Device Communication Acknowledgement' */
+        public string ServiceID_008()
+        {
+            /*in this service the data length should be "0029" otherwise it will show length error*/
+            string result_008 = "";
+            if (DataLength != "0029")
+            {
+                result_008 = Error_ResponseCode("02");
+            }
+            else
+            {
+                /* the sessionkey is used to check the authentication, the session key and device-id should match with the value present in database.
+             if they does not match then authentication failure error will come*/
+                SessionKey = decryptValue.Substring(17, 6);
+                if (!lg.CheckSessionID(DevIDD, SessionKey))
+                {
+                    result_008 = Error_ResponseCode("07");
+                }
+                else
+                {
+                    Receiver_DID = decryptValue.Substring(23, 10);
+                    Ack_PN = decryptValue.Substring(33, 1);
+
+                    // device 1's did. because in 008 service the device 2 will be the sender and device 1 will be receiver.
+                    Int64 DID2 = Convert.ToInt64(Receiver_DID);
+                    //device 2's did. because here in this service the device 2 will be the sender and device 1 will be receiver.
+                    Int64 DID1 = Convert.ToInt64(DevIDD);
+                    
+                    /* HERE WE NEED To creat the object for update the database by giving the RDID, Actu_Action and flag(to show the exact function)
+                      through this we are sending the parameters which are required for Device_Comm function which is related to the database */
+                    PondStatus.PondCurrentStatus psts = new PondStatus.PondCurrentStatus();
+                    int P_S = psts.Device_Comm(DID1, DID2, "", 1, Ack_PN);
+                    result_008 = Encrypt("2080012" + DevIDD + "$$");                    
+                }
+            }
+            return result_008;
+        }
+
+        /* this function is to do the eighth service called 'Flash Programming' */
+        public string ServiceID_009()
+        {
+
+            string result_009 = "";
+
+            /* this variable is used to calculate the number of lines present in document*/
+            int Num_Of_Line = 0;
+            /* this variable is to calculate the number of data bytes present in the given document*/
+            int Data_In_Hex_fl = 0;
+            /* this is used to get the sum of all the data bytes present in givent document */
+            int sum = 0;
+            /* after getting the sum of data  bytes in the file then it needs to be change it into string type so for that this variable used  */
+            string strDataBytes = "";
+            /* after getting the sum of lines in the file then it needs to be change it into string type so for that this variable used  */
+            string strNoLines = "";
+
+            /*in this service the data length should be "0022" otherwise it will show length error*/
+            if (DataLength != "0022")
+            {
+                result_009 = Error_ResponseCode("02");
+            }
+            else
+            {
+                /* the sessionkey is used to check the authentication, the session key and device-id should match with the value present in database.
+             if they does not match then authentication failure error will come*/
+                SessionKey = decryptValue.Substring(17, 6);
+                if (!lg.CheckSessionID(DevIDD, SessionKey))
+                {
+                    result_009 = Error_ResponseCode("07");
+                }
+                else
+                {
+                    /* this Pgm_Area is the string it will tel about the exact program area  */
+                    Pgm_Area = decryptValue.Substring(23, 1);
+
+                    if (Pgm_Area != "0" && Pgm_Area != "1" && Pgm_Area != "2")
+                    {
+                        result_009 = Error_ResponseCode("08");
+                    }
+                    else
+                    {
+                        Packet_Num = decryptValue.Substring(24, 3);
+                        int Pact_num = Convert.ToInt32(Packet_Num);
+                        /* based on 3 different program area respective file will be taken*/
+
+                        
+                        if (Pgm_Area == "0")
+                        {
+                            var path = System.Web.Hosting.HostingEnvironment.MapPath("~/02_Device_Hex_Files") + "\\" + "boot.hex";
+                            FilePath = path;
+                        }
+                        else if (Pgm_Area == "1")
+                        {                            
+                            var path = System.Web.Hosting.HostingEnvironment.MapPath("~/02_Device_Hex_Files") + "\\" + "appl_area1.hex";
+                            FilePath = path;
+                        }
+                        else if (Pgm_Area == "2")
+                        {
+                            var path = System.Web.Hosting.HostingEnvironment.MapPath("~/02_Device_Hex_Files") + "\\" + "appl_area2.hex";
+                            FilePath = path;
+                        }
+                        /* this function is to calculate number of lines in the file.*/
+
+
+                        int numOfLines = File.ReadAllLines(FilePath).Length;
+                        int packet_count = pakt_num_cont(numOfLines);
+
+                        if (Pact_num > packet_count)
+                        {
+                            result_009 = Error_ResponseCode("09");
+                        }
+                        else
+                        {
+                            string finaldatastr = "";
+                            string[] totaldatastr;
+                            /*to get the previous number of lines.(to get the number of lines in requested packet)*/
+                            int prevsLineCon = (Pact_num - 1) * 32;
+                            /* from particular packet eo end of file how many number of lines to get the number of line if packet contain less than 32 lines.*/
+                            int remainLine = numOfLines - prevsLineCon;
+                            /* to check the weather number of lines present in packet is less than 32 or not*/
+                            decimal wholePacketNum = remainLine / 32;
+
+                            /*this is to get the exact value from where data should get start to read, it will be in byte. from which byte 
+                              it should start to read in that particular packet*/
+                            if (wholePacketNum < 1)
+                            {
+                                totaldatastr = GetLine(prevsLineCon, remainLine);//this case is for packet having lessthan 32 numbers of lines
+                                strNoLines = remainLine.ToString("D2");
+
+                            }
+                            else
+                            {
+                                totaldatastr = GetLine(prevsLineCon, 32);//this case is for packet having 32 lines
+                                strNoLines = "32";
+                            }
+
+
+                            for (int i = 0; i < totaldatastr.Length; i++)
+                            {
+                                finaldatastr = finaldatastr + totaldatastr[i]; //this is to get the final datastring in particular packet
+                            }
+                            /*this is to show the number of lines in particular packet and if it is single digit concat "0" to it*/
+                         
+                            /*to get the length field in responce of 009*/
+                            int Lngth = DevIDD.Length + 7 + finaldatastr.Length;
+                            string response_length = Lngth.ToString("D4");
+
+                            string resp_Code = "209" + response_length + DevIDD + Packet_Num + strNoLines + finaldatastr + "$$";
+                            result_009 = Encrypt(resp_Code);
+
+                        }
+
+                    }
+
+                }
+            }
+            return result_009;
+        }
+
+        public string ServiceID_010()
+        {
+            string result_010 = "";
+            PondSettings.PondSetting pset = new PondSettings.PondSetting();
+      
+            /*in this service the data length should be "0036" otherwise it will show length error*/
+            if (DataLength != "0036")
+            {
+                result_010 = Error_ResponseCode("02");
+            }
+            else
+            {
+                /* the sessionkey is used to check the authentication, the session key and device-id should match with the value present in database.
+            if they does not match then authentication failure error will come*/
+                SessionKey = decryptValue.Substring(17, 6);
+                if (!lg.CheckSessionID(DevIDD, SessionKey))
+                {
+                    result_010 = Error_ResponseCode("07");
+                }
+                else
+                {
+                    /* to tell about the Boot area and Application Area of the firmware. Boot area should be "B", and 
+                     Apllication area should be "A" always. otherwise it will give error as "invalid parameter"*/
+                    BootPgmArea = decryptValue.Substring(23, 1);
+                    ApplPgmArea = decryptValue.Substring(32, 1);
+                    if ((BootPgmArea != "B") || (ApplPgmArea != "A"))
+                    {
+                        result_010 = Error_ResponseCode("05");
+                    }
+                    else
+                    {
+                        /*to get the boot version number. and to do some validation for theat number like version number should be numbers always
+                         and after every two numbers it should be dot(.)*/
+                        BootVersnNum = decryptValue.Substring(24, 8);
+                        ApplVersnNum = decryptValue.Substring(33, 8);
+                        
+                        if ((decryptValue[24] < '0' || decryptValue[24] > '9') || (decryptValue[25] < '0' || decryptValue[25] > '9') || (decryptValue[27] < '0' || decryptValue[27] > '9')
+                            || (decryptValue[28] < '0' || decryptValue[28] > '9') || (decryptValue[30] < '0' || decryptValue[30] > '9') || (decryptValue[31] < '0' || decryptValue[31] > '9')
+                            || (decryptValue[26] != '.' || decryptValue[29] != '.'))
+                        {
+                            result_010 = Error_ResponseCode("05");
+                        }
+                        else
+                        {
+                            if ((decryptValue[33] < '0' || decryptValue[33] > '9') || (decryptValue[34] < '0' || decryptValue[34] > '9') || (decryptValue[36] < '0' || decryptValue[36] > '9')
+                            || (decryptValue[37] < '0' || decryptValue[37] > '9') || (decryptValue[39] < '0' || decryptValue[39] > '9') || (decryptValue[40] < '0' || decryptValue[40] > '9')
+                            || (decryptValue[35] != '.' || decryptValue[38] != '.'))
+                            {
+                                result_010 = Error_ResponseCode("05");
+                            }
+                            else
+                            {
+                                int RowsAffected = pset.UpdateVersnnum(DevIDD, BootVersnNum, ApplVersnNum);
+                                if (RowsAffected == 0)
+                                {
+                                    result_010 = Error_ResponseCode("05");
+                                }
+                                else
+                                {
+                                    string resp_Code = "2100018" + DevIDD + "$$";
+                                    result_010 = Encrypt(resp_Code);
+                                }
+                            }
+                             
+                        }                                                       
+                   }
+
+               }
+            }
+            return result_010;
+        }
+
+        //public string ServiceID_011()
+        //{
+        //    string result_011 = "";
+
+        //    /* this is the list to store the device id and its sensar values to database*/
+        //    List<string> PondData_SensarData = new List<string>();
+
+        //    /*in this service the data length should be "0047" otherwise it will show length error*/
+        //    if (DataLength != "0047")
+        //    {
+        //        result_011 = Error_ResponseCode("02");
+        //    }
+        //    else
+        //    {
+        //        /* the sessionkey is used to check the authentication, the session key and device-id should match with the value present in database.
+        //   if they does not match then authentication failure error will come*/
+        //        SessionKey = decryptValue.Substring(17, 6);
+        //        if (!lg.CheckSessionID(DevIDD, SessionKey))
+        //        {
+        //            result_011 = Error_ResponseCode("07");
+        //        }
+        //        else
+        //        {
+        //            /*to store the device id to database*/
+        //            PondData_SensarData.Add(DevIDD);
+        //            /*extract all the values required for 011 service*/
+        //            string DO_Sensar = decryptValue.Substring(23, 1);
+        //            string DOValue = decryptValue.Substring(24, 5);
+        //            string TempValue = decryptValue.Substring(29, 5);
+        //            string SaturationValue = decryptValue.Substring(34, 6);
+        //            string PH_Sensar = decryptValue.Substring(40, 1);
+        //            string PHValue = decryptValue.Substring(41, 5);
+        //            string TBDT_Sernsar = decryptValue.Substring(46, 1);
+        //            string TBDTValue = decryptValue.Substring(47, 5);
+
+        //            /*there are 3 sensars their values should be 'yes' or 'no'
+        //              if the value is otherthan these values then invalid parameter responce will come */
+        //            if ((DO_Sensar != "Y" && DO_Sensar != "N") || (PH_Sensar != "N" && PH_Sensar != "Y") || (TBDT_Sernsar != "Y" && TBDT_Sernsar != "N"))
+        //            {
+        //                result_011 = Error_ResponseCode("05");
+        //            }
+        //            else
+        //            {
+        //                /*the do_sensar value is either 'y' or 'n' then store that in list and then read and store 
+        //                 the respective values like do_value, temp_value, saturationvalue to database.*/
+        //                PondData_SensarData.Add(DO_Sensar);
+
+
+
+        //                /*if the do_sensar value is 'y' then it means that sensar is  present and read 
+        //                      the values of that respective values and store in database.*/
+        //                if (DO_Sensar == "Y")
+        //                {
+
+        //                    /* this is to validate the data values of the do_sensar*/
+        //                    if ((decryptValue[24] < '0') || (decryptValue[24] > '9') || (decryptValue[25] < '0') || (decryptValue[25] > '9')
+        //                        || (decryptValue[26] != '.') || (decryptValue[27] < '0') || (decryptValue[27] > '9') || (decryptValue[28] < '0')
+        //                        || (decryptValue[28] > '9') || (decryptValue[29] < '0') || (decryptValue[29] > '9') || (decryptValue[30] < '0')
+        //                        || (decryptValue[30] > '9') || (decryptValue[31] != '.') || (decryptValue[32] < '0') || (decryptValue[32] > '9')
+        //                        || (decryptValue[33] < '0') || (decryptValue[33] > '9') || (decryptValue[34] < '0') || (decryptValue[34] > '9')
+        //                        || (decryptValue[35] < '0') || (decryptValue[35] > '9') || (decryptValue[36] < '0') || (decryptValue[36] > '9')
+        //                        || (decryptValue[37] != '.') || (decryptValue[38] < '0') || (decryptValue[38] > '9') || (decryptValue[39] < '0')
+        //                        || (decryptValue[39] > '9'))
+        //                    {
+        //                        result_011 = Error_ResponseCode("05");
+        //                    }
+        //                    else
+        //                    {
+        //                        PondData_SensarData.Add(DOValue);
+        //                        PondData_SensarData.Add(TempValue);
+        //                        PondData_SensarData.Add(SaturationValue);
+        //                    }
+        //                }
+        //                else
+        //                {
+        //                    /*if the do_sensar value is 'n' then it means that sensar is not present and read 
+        //                      the values like 00 to all that respective values and store in database.*/
+        //                    DOValue = "00.00";
+        //                    TempValue = "00.00";
+        //                    SaturationValue = "000.00";
+        //                    PondData_SensarData.Add(DOValue);
+        //                    PondData_SensarData.Add(TempValue);
+        //                    PondData_SensarData.Add(SaturationValue);
+        //                }
+
+        //                /*the PH_sensar value is either 'y' or 'n' then store that in list and then read and store 
+        //                 the respective value like PHValue to database.*/
+        //                PondData_SensarData.Add(PH_Sensar);
+
+        //                /*if the PH_sensar value is 'y' then it means that sensar is  present and read 
+        //                      the value of that respective value and store in database.*/
+        //                if (PH_Sensar == "Y")
+        //                {
+
+        //                    /* to validate the ph value*/
+        //                    if ((decryptValue[41] < '0') || (decryptValue[41] > '9') || (decryptValue[42] < '0') || (decryptValue[42] > '9')
+        //                      || (decryptValue[43] != '.') || (decryptValue[44] < '0') || (decryptValue[44] > '9') || (decryptValue[45] < '0')
+        //                      || (decryptValue[45] > '9'))
+        //                    {
+        //                        result_011 = Error_ResponseCode("05");
+        //                    }
+        //                    else
+        //                    {
+        //                        PondData_SensarData.Add(PHValue);
+        //                    }
+
+
+        //                }
+        //                else
+        //                {
+        //                    /*if the PH_sensar value is 'n' then it means that sensar is not present and read 
+        //                    the value like 00 to that respective value and store in database.*/
+        //                    PHValue = "00.00";
+        //                    PondData_SensarData.Add(PHValue);
+        //                }
+
+        //                /*the TBDT_sensar value is either 'y' or 'n' then store that in list and then read and store 
+        //                 the respective value like TBDTValue to database.*/
+        //                PondData_SensarData.Add(TBDT_Sernsar);
+
+        //                /*if the TBDT_sensar value is 'y' then it means that sensar is  present and read 
+        //                  the value of that respective value and store in database.*/
+        //                if (TBDT_Sernsar == "Y")
+        //                {
+        //                    /* to validate the TBDT value*/
+        //                    if ((decryptValue[47] < '0') || (decryptValue[47] > '9') || (decryptValue[48] < '0') || (decryptValue[48] > '9')
+        //                    || (decryptValue[49] != '.') || (decryptValue[50] < '0') || (decryptValue[50] > '9') || (decryptValue[51] < '0')
+        //                    || (decryptValue[51] > '9'))
+        //                    {
+        //                        result_011 = Error_ResponseCode("05");
+        //                    }
+        //                    else
+        //                    {
+        //                        PondData_SensarData.Add(TBDTValue);
+        //                    }
+
+        //                }
+        //                else
+        //                {
+        //                    /*if the TBDT_sensar value is 'n' then it means that sensar is not present and read 
+        //                    the value like 00 to that respective value and store in database.*/
+        //                    TBDTValue = "00.00";
+        //                    PondData_SensarData.Add(TBDTValue);
+        //                }
+
+        //                /*this is the calling of function to store these sensar data into database*/
+        //                int RowsAffected = CNP.CntPlus_Sensardata(PondData_SensarData);
+
+        //                /*if the pond current status did not updated with new values then when user asked for updated values it will give error*/
+        //                if (RowsAffected == 0)
+        //                {
+        //                    result_011 = Error_ResponseCode("05");
+        //                }
+        //                else
+        //                {
+        //                    /*after successfull storing of sensar data the positive response will come*/
+        //                    string resp_Code = "2110012" + DevIDD + "$$";
+        //                    result_011 = Encrypt(resp_Code);
+        //                }
+        //            }
+        //        }
+        //    }
+        //    return result_011;
+        //}
+
+        public string ServiceID_011()
+        {
+            string result_011 = "";
+            string No_Of_Sensors = "";
+            string Sensor1 = "";
+            string Sensor2 = "";
+            string Sensor3 = "";
+            string Sensor4 = "";
+            string Sensor5 = "";
+                        
+            String Sensor1DataLen = "";
+            String Sensor1Data = "";
+
+            //String Sensor2DataLen = "";
+            //String Sensor2Data = "";
+
+            //String Sensor3DataLen = "";
+            //String Sensor3Data = "";
+
+            //String Sensor4DataLen = "";
+            //String Sensor4Data = "";
+
+            //String Sensor5DataLen = "";
+            //String Sensor5Data = "";
+
+            //String Sensor6DataLen = "";
+            //String Sensor6Data = "";
+
+            //String Sensor7DataLen = "";
+            //String Sensor7Data = "";
+
+            //String Sensor8DataLen = "";
+            //String Sensor8Data = "";
+
+            //String Sensor9DataLen = "";
+            //String Sensor9Data = "";
+
+            //String ProcessSensorVal1 = "NA";
+            //String ProcessSensorVal2 = "NA";
+            //String ProcessSensorVal3 = "NA";
+            //String ProcessSensorVal4 = "NA";
+            //String ProcessSensorVal5 = "NA";
+
+            decimal ProcessValDec;
+
+            int FunIDD = 0;
+            decimal FunParam1 = 0;
+            decimal FunParam2 = 0;
+            decimal FunParam3 = 0;
+            decimal FunParam4 = 0;
+            decimal FunParam5 = 0;
+
+            int RowsAffected = 0;
+
+            CondFlg = false;
+
+            String TerSeq = "";
+            int Rslt = 0;
+            int RsltTemp = 0;
+            decimal[] ParamValues = new decimal[5];
+
+            /*in the second service the data length should be "0078" otherwise it will give error as length error*/
+            if (Convert.ToInt32(DataLength) < 44) //Check 004 SID For min lenght. here min length is 44
+            {
+                result_011 = Error_ResponseCode("02");
+            }
+            else
+            {
+                SessionKey = decryptValue.Substring(17, 6);
+
+                if (!lg.CheckSessionID(DevIDD, SessionKey))
+                {
+                    result_011 = Error_ResponseCode("07");
+                }
+                else
+                {
+                    DateVal = decryptValue.Substring(23, 10);
+                    /* get the time from that decrypted string using substring method*/
+                    TimeVal = decryptValue.Substring(33, 5);
+
+                    /*date formate is like dd-mm-yyyy*/
+                    string DtVal = decryptValue.Substring(23, 2);
+                    string MnthVal = decryptValue.Substring(26, 2);
+                    string YrVal = decryptValue.Substring(29, 4);
+
+                    DateTime thisDate1 = new DateTime(2011, 6, 10);
+
+                    try
+                    {
+                        thisDate1 = new DateTime(Convert.ToInt16(YrVal), Convert.ToInt16(MnthVal), Convert.ToInt16(DtVal));
+                    }
+                    catch (Exception ex)
+                    {
+                        /* if we did not get the correct date then error will through here as invalid parameter*/
+                        CondFlg = true;
+                    }
+
+
+                    if (CondFlg == true)
+                    {
+                        result_011 = Error_ResponseCode("05");
+                    }
+                    else
+                    {
+
+                        /*it will give running date and time of Sensor Values*/
+                        string strdate = thisDate1.ToString("yyyy/MM/dd") + " " + TimeVal + ":00"; //This is for crop start date
+
+                        DateTime Dte;
+
+                        /*if the start date time and stored date time is not eqal then it will give error*/
+                        if (!DateTime.TryParse(strdate, out Dte))
+                        {
+                            result_011 = Error_ResponseCode("05");
+                        }
+                        else
+                        {
+                            /*here these will give the pond parameters from the string by using substring method*/
+                            No_Of_Sensors = decryptValue.Substring(38, 2);
+
+                            int SensorNo = Convert.ToInt32(No_Of_Sensors);
+
+                            FunParam1 = 0;
+                            FunParam2 = 0;
+                            FunParam3 = 0;
+                            FunParam4 = 0;
+                            FunParam5 = 0;
+
+                            int BufforPos = 40;
+                            bool FailFlg = false;
+
+                            for (int i = 0; (i < SensorNo) && (!FailFlg); i++)
+                            {                                
+                                Sensor1 = decryptValue.Substring(BufforPos, 2);
+                                BufforPos = BufforPos + 2;
+                                Sensor1DataLen = decryptValue.Substring(BufforPos, 2);
+                                BufforPos = BufforPos + 2;
+                                String Unt = "";
+
+                                if (Convert.ToInt32(Sensor1DataLen) == 15)
+                                {
+                                    Sensor1Data = decryptValue.Substring(BufforPos, Convert.ToInt32(Sensor1DataLen));
+                                    string SensData = Sensor1Data.Substring(0, 13);
+                                    Unt = Sensor1Data.Substring(13, 2);
+                                    Sensor1Data = "";
+                                    Sensor1Data = SensData;
+                                }
+                                else if (Convert.ToInt32(Sensor1DataLen) == 13)
+                                {
+                                    Sensor1Data = decryptValue.Substring(BufforPos, Convert.ToInt32(Sensor1DataLen));
+                                    string symb = Sensor1Data.Substring(0, 1);
+                                    string SensData = Sensor1Data.Substring(1, 10);
+                                    if(symb == "M")
+                                    {
+                                        SensData = "-" + SensData;
+                                    }
+                                    
+                                    Unt = Sensor1Data.Substring(11, 2);
+                                    Sensor1Data = "";
+                                    Sensor1Data = SensData;
+                                }
+                                else
+                                {
+                                    Sensor1Data = decryptValue.Substring(BufforPos, Convert.ToInt32(Sensor1DataLen));
+                                }
+
+                                BufforPos = BufforPos + Convert.ToInt32(Sensor1DataLen);
+
+                                //RETRIEVE THE FUNCTION VALUE FROM TABLE TO PROCESS THE SENSOR DATA
+
+                                FunctionParams FuncParm = Pcs.Get_SensorFunctionID(DevIDD, Sensor1);
+
+                                FunIDD = FuncParm.FuncID;
+                                FunParam1 = FuncParm.FunParam1;
+                                FunParam2 = FuncParm.FunParam2;
+                                FunParam3 = FuncParm.FunParam3;
+                                FunParam4 = FuncParm.FunParam4;
+                                FunParam5 = FuncParm.FunParam5;
+
+                                decimal SensrData = Convert.ToDecimal(Sensor1Data);
+
+                                RsltTemp = Pcs.ConnPlusTemp_Funtion(thisDate1.ToString(), strdate, DevIDD, Sensor1Data, Convert.ToInt32(Sensor1));
+
+                                ProcessValDec = FunctionTable(FunIDD, FunParam1, FunParam2, FunParam3, FunParam4, FunParam5, Convert.ToDecimal(Sensor1Data));
+
+                                //decimal paramvval = ProcessValDec;
+
+                                //ParamValues[0] = Convert.ToDecimal(ProcessSensorVal1);
+                                //ProcessValDec 
+
+
+                                Rslt = Pcs.ConnPlusSensor_InsertOp(ProcessValDec, DevIDD, strdate, Convert.ToInt32(Sensor1), Unt);
+
+                                if(Rslt == 0)
+                                {
+                                    FailFlg = true;
+                                }                              
+
+                            }
+
+                        }
+
+                    }
+
+                }
+            }
+
+            //Add The Data To The Database
+
+            RowsAffected = Rslt;
+            if (RowsAffected == 0)
+            {
+                result_011 = Error_ResponseCode("05");
+            }
+            else
+            {
+                /*after successfull storing of sensar data the positive response will come*/
+                string resp_Code = "2110012" + DevIDD + "$$";
+                result_011 = Encrypt(resp_Code);
+            }
+
+
+            return result_011;
+        }
+
+
+
+        //FOR MOD BUS DIRECT
+        public decimal Function1(decimal SensorData)
+        {
+            return SensorData;
+        }
+
+
+        //FOR 4 TO 20
+        public decimal Function2(decimal param1, decimal param2, decimal param3, decimal SensorData)
+        {
+            int GivenRange = 16000; //Current in Micro Amp
+            decimal Factorr;
+            decimal VariableRange = param2 - param1;
+            Factorr = VariableRange / GivenRange;
+
+            //To ensure Min value is 4 mA;
+            if(SensorData<4000)
+            {
+                SensorData = 4000;
+            }
+
+            decimal EffectiveSensorData = SensorData - 4000;
+            decimal ProcessedValue = EffectiveSensorData * Factorr;
+
+
+            //param3 is used for deviation of values from measurement and actual. 
+            //It is a factor taken as percentage of deviation.
+
+            decimal ProcessedValNew = ProcessedValue * (1 + param3 / 100);
+
+            if (ProcessedValNew > param2)
+            {
+                ProcessedValNew = param2;
+            }
+            else if(ProcessedValNew < param1)
+            {
+                ProcessedValNew = param1;
+            }
+          
+
+            //return ProcessedValue;
+            return ProcessedValNew;
+        }
+
+       
+        /* this function is to calculate the number of lines present in the packet*/
+        public int count_line(string file)
+        {
+            int linecount = 0;
+            char data;
+            FileStream fs = new FileStream(file, FileMode.Open);
+            using (var brdr = new BinaryReader(fs))
+            {
+                while (brdr.PeekChar() != null)
+                {
+                    data = brdr.ReadChar();
+                    if (data == ':')
+                    {
+                        linecount = linecount + 1;
+                    }
+                }
+                return linecount;
+            }
+        }
+
+        string[] GetLine(int startpos, int line)
+        {
+            int Tempcount = 0;
+
+            string[] finalData = new string[line];
+            
+            foreach(var item in File.ReadLines(FilePath))
+            {
+                if((Tempcount >=  startpos) && (Tempcount < startpos + line ))
+                {
+                    finalData[Tempcount - startpos] = item;
+                }
+
+                Tempcount = Tempcount + 1;
+            }
+
+            
+            return finalData;
+        }
+
+        /* this is the function is to calculate the number of packets present in the given file. */
+        public int pakt_num_cont(int count_line)
+        {
+            int packetrndfig = 0;
+            int packetfractnfig = 0;
+
+            packetrndfig = count_line / 32; // here we will get round figure of packet number.
+            packetfractnfig = count_line % 32; // if we get decimal part in packet number we need to increment the packet number by 1 digit.
+
+            if (packetfractnfig > 0)
+            {
+                packetrndfig = packetrndfig + 1;
+            }
+            return packetrndfig;
+        }
+
+        /*this is to ensure that device key sent and recived are same, then only login service will successfull*/
+        private string Generate_LoginResponse(string DevID)
+        {
+            string DeviceID = DevID;
+            string ResponseCode = "";
+            string StrCode = "";
+            Random rnd = new Random();
+
+            try
+            {
+                int RandM_No = rnd.Next(100000, 999999);
+
+                StrCode = StrCode + "201018" + DevID + RandM_No.ToString() + "$$";
+
+                SessionKey = Gen_SessionKey(RandM_No.ToString(), DevID);
+
+                return StrCode;
+            }
+            catch (Exception ex)
+            {
+                string ExMessage = ex.Message;
+                return "";
+            }
+        }
+        /* this method is used for Generate the Session Key*/
+        private string Gen_SessionKey(string Seed, string DID)
+        {
+            string strKey = "";
+            foreach (char x in Seed)
+            {
+                strKey = strKey + ((char)(x + 1));
+            }
+
+            Pcs.Insert_RandomNo(Seed, strKey, DID);
+
+            return strKey;
+        }
+
+        /*this is for genaration of error responce code*/
+        private string Error_ResponseCode(string Code)
+        {
+            string ResponseCode = "4000004" + Code + "$$";
+            return Encrypt_Error(ResponseCode);
+        }
+
+
+        public string Generate_PondParameters(List<string> ponddata)
+        {
+            //PondData.Add()
+            foreach (string x in ponddata)
+            {
+                string ss = x;
+            }
+            return "";
+        }
+
+        public decimal FunctionTable(int FuncID, decimal param1, decimal param2, decimal param3, decimal param4, decimal param5, decimal SensorData)
+        {
+            decimal Val = 0;
+
+            switch(FuncID)
+            {
+                case 1:
+                    Val = Function1(SensorData);
+                    break;
+                case 2:
+                    Val = Function2(param1, param2, param3, SensorData);                    
+                    break;
+            }
+
+            return Val;
+        }
+    }
+     
+}
